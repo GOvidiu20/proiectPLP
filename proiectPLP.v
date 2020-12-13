@@ -33,7 +33,6 @@ Inductive AExp :=
 | adiv : AExp -> AExp -> AExp
 | aproc: AExp -> AExp -> AExp.
 Inductive BExp :=
-| bvar : string-> BExp
 | btrue : BExp
 | bfalse : BExp
 | blessthan : AExp -> AExp -> BExp
@@ -47,20 +46,61 @@ Inductive SExp :=
 | sconc : string -> string -> SExp
 | scmp : string -> string -> SExp
 | scpy : string -> string -> SExp.
+
 Inductive Stmt :=
 | nat_decl : string -> Stmt
-| nat_assig : string -> AExp -> Stmt
+| nat_assign : string -> AExp -> Stmt
 | nat_decl_assign : string -> AExp -> Stmt
 | bool_decl : string -> Stmt
-| bool_assig : string -> BExp -> Stmt
+| bool_assign : string -> BExp -> Stmt
 | bool_decl_assign : string -> BExp -> Stmt
 | string_decl : string -> Stmt
-| string_assig : string -> SExp -> Stmt
+| string_assign : string -> SExp -> Stmt
 | string_decl_assign : string -> SExp -> Stmt
 | sequence : Stmt -> Stmt -> Stmt
 | while : BExp -> Stmt -> Stmt
 | ifthen : BExp -> Stmt -> Stmt
 | ifelse : BExp -> Stmt -> Stmt ->Stmt.
+Inductive Coada :=
+| nil : Coada
+| elem : nat -> Coada -> Coada.
+Coercion anum : nat >-> AExp.
+Coercion avar : string >-> AExp.
+Coercion svar : string >-> SExp.
 
+Notation "A +' B" := (aplus A B) (at level 48).
+Notation "A ++' " := (aplus A 1) (at level 48).
+Notation "A -' B" := (aminus A B) (at level 48).
+Notation "A --' " := (aminus A 1) (at level 48).
+Notation "A *' B" := (amul A B) (at level 46).
+Notation "A /' B" := (adiv A B) (at level 58).
+Notation "A %' B" := (aproc A B) (at level 58).
+Notation "A <=' B" := (blessthan A B) (at level 53).
+Notation "A =>' B" := (bgreaterthan A B) (at level 53).
+Notation "A ==' B" := (bequal A B) (at level 53).
+Notation " !' A" := (bnot A) (at level 53).
+Notation "A &' B" := (band A B) (at level 53).
+Notation "A |' B" := (bor A B) (at level 53).
+Notation "A 'concat' B" := (sconc A B) (at level 53).
+Notation "A 'cmp' B" := (scmp A B) (at level 53).
+Notation "A 'cpy' B" := (scpy A B) (at level 53).
+Notation " 'int' A " := (nat_decl A) (at level 50).
+Notation " X ':n=' A  " := (nat_assign X A) (at level 50).
+Notation " 'int*' X ':n=' A  " := (nat_decl_assign X A) (at level 50).
+Notation " 'bol' A " := (bool_decl A) (at level 50).
+Notation " X ':b=' A  " := (bool_assign X A) (at level 50).
+Notation " 'bol*' X ':n=' A  " := (bool_decl_assign X A) (at level 50).
+Notation " 'chars' A " := (string_decl A) (at level 50).
+Notation " X ':s=' A  " := (string_assign X A) (at level 50).
+Notation " 'chars*' X ':n=' A  " := (string_decl_assign X A) (at level 50).
+Notation "S1 ;; S2" := (sequence S1 S2) (at level 90).
+Notation " 'If' '(' b ')' 'Then' S1 'Else' S2  " := (ifelse b S1 S2 ) (at level 70).
+Notation " 'While' '(' b ')' '{' S '}'" := (while b S)(at level 71).
+Notation " 'For' '(' S1 ';' b ';' S2 ')' '{' S3 '}' " := ( S1 ;; while b (S3 ;; S2) ) (at level 71).
+Notation " 'Do' '{' S1 '}' 'while*' '(' b ')' " := ( S1 ;; while b (S1) ) (at level 71).
 
-
+Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
+      "ok" :n= "ok" +' 1
+}.
+Check While ( "i" =>' 9 ) { "ok" :s= "dada"} .
+Check "k"++'.
