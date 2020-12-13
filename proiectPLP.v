@@ -6,6 +6,7 @@ Require Import Coq.Strings.Byte.
 Require Import Strings.String.
 Local Open Scope string_scope.
 Scheme Equality for string.
+Local Open Scope list_scope.
 
 Inductive eroareNat :=
 | error_nat : eroareNat
@@ -16,13 +17,6 @@ Inductive eroareBool :=
 Inductive eroareString :=
 | error_str : eroareString
 | str : string -> eroareString.
-
-Inductive Values :=
-| undecl : Values
-| assign : Values
-| naturals: nat -> Values
-| booleans: bool -> Values
-| strings : string -> Values.
 
 Inductive AExp :=
 | avar : string -> AExp
@@ -41,7 +35,7 @@ Inductive BExp :=
 | bnot : BExp -> BExp
 | band : BExp -> BExp -> BExp
 | bor : BExp -> BExp -> BExp.
-Inductive SExp :=
+Inductive SExp := 
 | svar : string-> SExp
 | sconc : string -> string -> SExp
 | scmp : string -> string -> SExp
@@ -61,6 +55,29 @@ Inductive Stmt :=
 | while : BExp -> Stmt -> Stmt
 | ifthen : BExp -> Stmt -> Stmt
 | ifelse : BExp -> Stmt -> Stmt ->Stmt.
+
+Inductive Values :=
+| undecl : Values
+| assign : Values
+| naturals: nat -> Values
+| booleans: bool -> Values
+| strings : string -> Values
+| code : Stmt -> Values.
+Definition Parametrii := list Values.
+Inductive Programs :=
+| decl_functie : string -> Parametrii -> Stmt -> Programs
+| decl_var_globale: string -> Programs
+| decl_var_locale: string -> Programs
+| decl_functie_main : string -> Stmt -> Programs
+| sequance_program : Programs -> Programs -> Programs.
+Inductive Memory :=
+  | mem_default : Memory
+  | offset : nat -> Memory.
+Definition Env := string -> Memory.
+Definition MemLayer := Memory -> Values.
+Definition Stack := list Env.
+Inductive Config :=
+  | config : nat -> Env -> MemLayer -> Stack -> Config.
 Inductive Coada :=
 | nil : Coada
 | elem : nat -> Coada -> Coada.
@@ -98,6 +115,7 @@ Notation " 'If' '(' b ')' 'Then' S1 'Else' S2  " := (ifelse b S1 S2 ) (at level 
 Notation " 'While' '(' b ')' '{' S '}'" := (while b S)(at level 71).
 Notation " 'For' '(' S1 ';' b ';' S2 ')' '{' S3 '}' " := ( S1 ;; while b (S3 ;; S2) ) (at level 71).
 Notation " 'Do' '{' S1 '}' 'while*' '(' b ')' " := ( S1 ;; while b (S1) ) (at level 71).
+
 
 Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
       "ok" :n= "ok" +' 1
