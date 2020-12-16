@@ -7,6 +7,8 @@ Require Import Strings.String.
 Local Open Scope string_scope.
 Scheme Equality for string.
 Local Open Scope list_scope.
+Require Import List.
+Import ListNotations.
 
 Inductive eroareNat :=
 | error_nat : eroareNat
@@ -14,9 +16,6 @@ Inductive eroareNat :=
 Inductive eroareBool :=
 | error_bool : eroareBool
 | boolean : bool -> eroareBool.
-Inductive eroareString :=
-| error_str : eroareString
-| str : string -> eroareString.
 
 Inductive AExp :=
 | avar : string -> AExp
@@ -35,12 +34,8 @@ Inductive BExp :=
 | bnot : BExp -> BExp
 | band : BExp -> BExp -> BExp
 | bor : BExp -> BExp -> BExp.
-Inductive SExp := 
-| svar : string-> SExp
-| sconc : string -> string -> SExp
-| scmp : string -> string -> SExp
-| scpy : string -> string -> SExp.
 
+Definition Parametrii := list string.
 Inductive Stmt :=
 | nat_decl : string -> Stmt
 | nat_assign : string -> AExp -> Stmt
@@ -48,28 +43,27 @@ Inductive Stmt :=
 | bool_decl : string -> Stmt
 | bool_assign : string -> BExp -> Stmt
 | bool_decl_assign : string -> BExp -> Stmt
-| string_decl : string -> Stmt
-| string_assign : string -> SExp -> Stmt
-| string_decl_assign : string -> SExp -> Stmt
+| apelare_functie : string -> Parametrii -> Stmt
 | sequence : Stmt -> Stmt -> Stmt
 | while : BExp -> Stmt -> Stmt
 | ifthen : BExp -> Stmt -> Stmt
-| ifelse : BExp -> Stmt -> Stmt ->Stmt.
+| ifelse : BExp -> Stmt -> Stmt ->Stmt
+| lambda : string -> Parametrii -> Parametrii -> Stmt -> Stmt.
 
 Inductive Values :=
 | undecl : Values
 | assign : Values
+| default : Values
 | naturals: nat -> Values
 | booleans: bool -> Values
-| strings : string -> Values
 | code : Stmt -> Values.
-Definition Parametrii := list Values.
 Inductive Programs :=
 | decl_functie : string -> Parametrii -> Stmt -> Programs
 | decl_var_globale: string -> Programs
 | decl_var_locale: string -> Programs
-| decl_functie_main : string -> Stmt -> Programs
-| sequance_program : Programs -> Programs -> Programs.
+| decl_functie_main : Stmt -> Programs
+| sequance_program : Programs -> Programs -> Programs
+| decl_templates : string -> Programs.
 Inductive Memory :=
   | mem_default : Memory
   | offset : nat -> Memory.
@@ -83,7 +77,6 @@ Inductive Coada :=
 | elem : nat -> Coada -> Coada.
 Coercion anum : nat >-> AExp.
 Coercion avar : string >-> AExp.
-Coercion svar : string >-> SExp.
 
 Notation "A +' B" := (aplus A B) (at level 48).
 Notation "A ++' " := (aplus A 1) (at level 48).
@@ -98,27 +91,42 @@ Notation "A ==' B" := (bequal A B) (at level 53).
 Notation " !' A" := (bnot A) (at level 53).
 Notation "A &' B" := (band A B) (at level 53).
 Notation "A |' B" := (bor A B) (at level 53).
-Notation "A 'concat' B" := (sconc A B) (at level 53).
-Notation "A 'cmp' B" := (scmp A B) (at level 53).
-Notation "A 'cpy' B" := (scpy A B) (at level 53).
 Notation " 'int' A " := (nat_decl A) (at level 50).
 Notation " X ':n=' A  " := (nat_assign X A) (at level 50).
-Notation " 'int*' X ':n=' A  " := (nat_decl_assign X A) (at level 50).
+Notation " 'int*' X '::n=' A  " := (nat_decl_assign X A) (at level 50).
 Notation " 'bol' A " := (bool_decl A) (at level 50).
 Notation " X ':b=' A  " := (bool_assign X A) (at level 50).
-Notation " 'bol*' X ':n=' A  " := (bool_decl_assign X A) (at level 50).
-Notation " 'chars' A " := (string_decl A) (at level 50).
-Notation " X ':s=' A  " := (string_assign X A) (at level 50).
-Notation " 'chars*' X ':n=' A  " := (string_decl_assign X A) (at level 50).
+Notation " 'bol*' X '::n=' A  " := (bool_decl_assign X A) (at level 50).
 Notation "S1 ;; S2" := (sequence S1 S2) (at level 90).
 Notation " 'If' '(' b ')' 'Then' S1 'Else' S2  " := (ifelse b S1 S2 ) (at level 70).
 Notation " 'While' '(' b ')' '{' S '}'" := (while b S)(at level 71).
 Notation " 'For' '(' S1 ';' b ';' S2 ')' '{' S3 '}' " := ( S1 ;; while b (S3 ;; S2) ) (at level 71).
 Notation " 'Do' '{' S1 '}' 'while*' '(' b ')' " := ( S1 ;; while b (S1) ) (at level 71).
-
+Notation " 'functie' S1 '(' a ')' '{' S2 '}' " :=( decl_functie S1 a S2)(at level 45).
+Notation " 'begin_main ' S2 'end_main' " :=( decl_functie_main S2).
+Notation " 'intglobal' A " := (decl_var_globale A) (at level 50).
+Notation " S1 ';*' S2 " := (sequance_program S1 S2)(at level 50).
+Notation " 'Template' '<' S '>'" := (decl_templates S )(at level 49).
+Notation " a '=*' p1 p2 '{' s '}' ":= (lambda a p1 p2 s )(at level 49). 
 
 Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
       "ok" :n= "ok" +' 1
 }.
-Check While ( "i" =>' 9 ) { "ok" :s= "dada"} .
+Check While ( "i" =>' 9 ) { "ok" :n= "dada" } .
 Check "k"++'.
+Check 1+'1.
+
+Check decl_functie "da" [ "ok";"da" ] ("ok":n= "ok"++') .
+Check decl_functie_main ( "ok":n= "ok"++' ).
+Check int "a".
+Check "a":n=3.
+Check int* "a"::n=4.
+Check decl_templates "tip" ;*
+      decl_functie "da" [ "ok";"da" ] ("ok":n= "ok"++') ;*
+      intglobal "ok" ;* 
+      decl_functie_main ( (int* "ok"::n="ok"+'1) ;;
+                          lambda "lbd" []["ok"] ("ok":n=1) ;;
+                          apelare_functie "da" [ "a";"b" ]
+                        ).
+
+
