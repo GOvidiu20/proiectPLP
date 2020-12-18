@@ -72,10 +72,13 @@ Definition MemLayer := Memory -> Values.
 Definition Stack := list Env.
 Inductive Config :=
   | config : nat -> Env -> MemLayer -> Stack -> Config.
-Inductive Coada :=
-| nil : Coada
-| elem : nat -> Coada -> Coada.
-Coercion anum : nat >-> AExp.
+Inductive instructiuni :=
+| push : string -> instructiuni
+| pop : string -> instructiuni
+| front : instructiuni.
+
+Definition Coada := list Values.
+
 Coercion avar : string >-> AExp.
 
 Notation "A +' B" := (aplus A B) (at level 48).
