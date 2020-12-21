@@ -9,7 +9,7 @@ Scheme Equality for string.
 Local Open Scope list_scope.
 Require Import List.
 Import ListNotations.
-
+Definition Var := string.
 Inductive eroareNat :=
 | error_nat : eroareNat
 | num : nat -> eroareNat.
@@ -35,14 +35,14 @@ Inductive BExp :=
 | band : BExp -> BExp -> BExp
 | bor : BExp -> BExp -> BExp.
 
-Definition Parametrii := list string.
+Definition Parametrii := list Var.
 Inductive Stmt :=
-| nat_decl : string -> Stmt
-| nat_assign : string -> AExp -> Stmt
-| nat_decl_assign : string -> AExp -> Stmt
-| bool_decl : string -> Stmt
-| bool_assign : string -> BExp -> Stmt
-| bool_decl_assign : string -> BExp -> Stmt
+| nat_decl : Var -> Stmt
+| nat_assign : Var -> AExp -> Stmt
+| nat_decl_assign : Var -> AExp -> Stmt
+| bool_decl : Var -> Stmt
+| bool_assign : Var -> BExp -> Stmt
+| bool_decl_assign : Var -> BExp -> Stmt
 | apelare_functie : string -> Parametrii -> Stmt
 | sequence : Stmt -> Stmt -> Stmt
 | while : BExp -> Stmt -> Stmt
@@ -54,13 +54,13 @@ Inductive Values :=
 | undecl : Values
 | assign : Values
 | default : Values
-| naturals: nat -> Values
-| booleans: bool -> Values
+| naturals: eroareNat -> Values
+| booleans: eroareBool -> Values
 | code : Stmt -> Values.
 Inductive Programs :=
 | decl_functie : string -> Parametrii -> Stmt -> Programs
-| decl_var_globale: string -> Programs
-| decl_var_locale: string -> Programs
+| decl_var_globale: Var -> Programs
+| decl_var_locale: Var -> Programs
 | decl_functie_main : Stmt -> Programs
 | sequance_program : Programs -> Programs -> Programs
 | decl_templates : string -> Programs.
@@ -73,13 +73,14 @@ Definition Stack := list Env.
 Inductive Config :=
   | config : nat -> Env -> MemLayer -> Stack -> Config.
 Inductive instructiuni :=
-| push : string -> instructiuni
-| pop : string -> instructiuni
+| push : Var -> instructiuni
+| pop : Var -> instructiuni
 | front : instructiuni.
 
 Definition Coada := list Values.
 
-Coercion avar : string >-> AExp.
+Coercion avar :  string >-> AExp.
+Coercion anum : nat >-> AExp.
 
 Notation "A +' B" := (aplus A B) (at level 48).
 Notation "A ++' " := (aplus A 1) (at level 48).
@@ -118,7 +119,6 @@ Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
 Check While ( "i" =>' 9 ) { "ok" :n= "dada" } .
 Check "k"++'.
 Check 1+'1.
-
 Check decl_functie "da" [ "ok";"da" ] ("ok":n= "ok"++') .
 Check decl_functie_main ( "ok":n= "ok"++' ).
 Check int "a".
@@ -126,7 +126,7 @@ Check "a":n=3.
 Check int* "a"::n=4.
 Check decl_templates "tip" ;*
       decl_functie "da" [ "ok";"da" ] ("ok":n= "ok"++') ;*
-      intglobal "ok" ;* 
+      intglobal "ok" ;*
       decl_functie_main ( (int* "ok"::n="ok"+'1) ;;
                           lambda "lbd" []["ok"] ("ok":n=1) ;;
                           apelare_functie "da" [ "a";"b" ]
