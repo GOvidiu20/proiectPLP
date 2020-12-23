@@ -137,14 +137,45 @@ Check nil.
 Check ( (num 1) ->' ( (num 2) ->' nil)).
 
 
-
-
-
-
-
-
-(*
 Definition Env := Var -> Values.
+Definition env1 : Env := fun x => undecl.
+Definition check_eq_over_types (t1 : Values)(t2 : Values) : bool :=
+  match t1 with
+| assign => match t2 with 
+                   | assign => true
+                   | _ => false
+                   end
+| undecl => match t2 with 
+                   | undecl => true
+                   | _ => false
+                   end
+| default => match t2 with 
+                   | default => true
+                   | _ => false
+                   end
+| naturals n=> match t2 with 
+                   | naturals n=> true
+                   | _ => false
+                   end
+| booleans n=> match t2 with 
+                   | booleans n=> true
+                   | _ => false
+                   end
+  end.
+Definition update (env : Env ) (x : string) (v : Values) : Env :=
+  fun y =>
+    if(eqb y x)
+    then
+      if(andb (check_eq_over_types undecl (env y)) (negb (check_eq_over_types default v)))
+      then undecl
+        else
+        if(andb (check_eq_over_types undecl (env y)) (check_eq_over_types default v))
+        then default
+          else
+          if(orb (check_eq_over_types default (env y)) (check_eq_over_types v (env y)))
+          then v
+            else assign
+    else (env y).
 Definition plus_eroareNat (n1 n2 : eroareNat) : eroareNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
@@ -344,23 +375,22 @@ Proof.
 Qed.
 
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
-
 Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_nat_decl: forall a i x sigma sigma',
    a =[ sigma ]=> i ->
-   sigma' = (update sigma x (res_nat i)) ->
+   sigma' = (update sigma x (naturals i)) ->
    (x :n= a) -{ sigma }-> sigma'
 | e_nat_assign: forall a i x sigma sigma',
     a =[ sigma ]=> i ->
-    sigma' = (update sigma x (res_nat i)) ->
+    sigma' = (update sigma x (naturals i)) ->
     (x :n= a) -{ sigma }-> sigma'
 | e_bool_decl: forall a i x sigma sigma',
    a ={ sigma }=> i ->
-   sigma' = (update sigma x (res_bool i)) ->
+   sigma' = (update sigma x (booleans i)) ->
    (x :b= a) -{ sigma }-> sigma'
 | e_bool_assign: forall a i x sigma sigma',
     a ={ sigma }=> i ->
-    sigma' = (update sigma x (res_bool i)) ->
+    sigma' = (update sigma x (booleans i)) ->
     (x :b= a) -{ sigma }-> sigma'
 | e_seq : forall s1 s2 sigma sigma1 sigma2,
     s1 -{ sigma }-> sigma1 ->
@@ -369,19 +399,53 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_if_then : forall b s sigma,
     ifthen b s -{ sigma }-> sigma
 | e_if_then_elsetrue : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> true ->
+    b ={ sigma }=> boolean true ->
     s1 -{ sigma }-> sigma' ->
-    ifthenelse b s1 s2 -{ sigma }-> sigma' 
+    ifelse b s1 s2 -{ sigma }-> sigma' 
 | e_if_then_elsefalse : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> false ->
+    b ={ sigma }=> boolean false ->
     s2 -{ sigma }-> sigma' ->
-    ifthenelse b s1 s2 -{ sigma }-> sigma' 
+    ifelse b s1 s2 -{ sigma }-> sigma' 
 | e_whilefalse : forall b s sigma,
-    b ={ sigma }=> false ->
+    b ={ sigma }=> boolean false ->
     while b s -{ sigma }-> sigma
 | e_whiletrue : forall b s sigma sigma',
-    b ={ sigma }=> true ->
+    b ={ sigma }=> boolean true ->
     (s ;; while b s) -{ sigma }-> sigma' ->
     while b s -{ sigma }-> sigma'
 where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
-*)
+
+Scheme Equality for Memory.
+Definition update_env (env: EnvMem) (x: string) (n: Memory) : EnvMem :=
+  fun y =>
+      if (andb (string_beq x y ) (Memory_beq (env y) mem_default))
+      then
+        n
+      else
+        (env y).
+Definition envMem : EnvMem := fun x => mem_default.
+Definition update_mem (mem : MemLayer) (env : EnvMem) (x : string) (type : Memory) (v : Values) : MemLayer :=
+  fun y =>
+    if(andb (Memory_beq y type)(Memory_beq (env x) type))
+    then
+      if(andb (check_eq_over_types undecl (mem y)) (negb (check_eq_over_types default v)))
+        then undecl
+      else
+        if(andb (check_eq_over_types undecl (mem y)) (check_eq_over_types default v))
+          then default
+        else
+          if(orb (check_eq_over_types default (mem y)) (check_eq_over_types v (mem y)))
+              then v
+          else assign
+    else (mem y).
+Definition mem : MemLayer := fun x => undecl.
+
+Check mem.
+Compute update_env envMem "x" mem_default.
+Compute update_env envMem "y" (offset 5).
+Compute envMem "x".
+Compute envMem "y".
+Compute ( update_env envMem  "x" (offset 5)) "x".
+Check envMem.
+Compute (update_mem mem envMem "sal" mem_default default).
+Compute (update_mem mem ( update_env envMem  "x" (offset 5)) "x" mem_default (naturals (num 5))).
