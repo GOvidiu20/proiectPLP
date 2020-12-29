@@ -6,6 +6,7 @@ Require Import Coq.Strings.Byte.
 Require Import Strings.String.
 Local Open Scope string_scope.
 Scheme Equality for string.
+Delimit Scope string_scope with string.
 Local Open Scope list_scope.
 Require Import List.
 Import ListNotations.
@@ -16,7 +17,6 @@ Inductive eroareNat :=
 Inductive eroareBool :=
 | error_bool : eroareBool
 | boolean : bool -> eroareBool.
-
 Inductive AExp :=
 | avar : string -> AExp
 | anum : nat -> AExp
@@ -50,11 +50,12 @@ Inductive Stmt :=
 | while : BExp -> Stmt -> Stmt
 | ifthen : BExp -> Stmt -> Stmt
 | ifelse : BExp -> Stmt -> Stmt ->Stmt
-| lambda : string -> Parametrii -> Parametrii -> Stmt -> Stmt.
+| lambda : string -> Parametrii -> Parametrii -> Stmt -> Stmt
+| comentarii : Stmt -> Stmt.
 
 Inductive Values :=
-| undecl : Values
-| assign : Values
+| err_undecl : Values
+| err_assign : Values
 | default : Values
 | naturals: eroareNat -> Values
 | booleans: eroareBool -> Values.
@@ -73,12 +74,14 @@ Definition MemLayer := Memory -> Values.
 Definition Stack := list EnvMem.
 Inductive Config :=
   | config : nat -> EnvMem -> MemLayer -> Stack -> Config.
-Inductive coada: Type :=
-| nil : coada
-| elem : eroareNat -> coada -> coada.
+Inductive coada ( tip : Set) : Set :=
+| nill : coada tip
+| elem : tip -> coada tip -> coada tip.
 
 Coercion avar :  string >-> AExp.
 Coercion anum : nat >-> AExp.
+Coercion num : nat >-> eroareNat.
+Coercion boolean: bool >-> eroareBool.
 
 Notation "A +' B" := (aplus A B) (at level 48).
 Notation "A ++' " := (aplus A 1) (at level 48).
@@ -109,11 +112,10 @@ Notation " 'begin_main ' S2 'end_main' " :=( decl_functie_main S2).
 Notation " 'intglobal' A " := (decl_var_globale A) (at level 50).
 Notation " S1 ';*' S2 " := (sequance_program S1 S2)(at level 50).
 Notation " 'Template' '<' S '>'" := (decl_templates S )(at level 49).
-Notation " a '=*' p1 p2 '{' s '}' ":= (lambda a p1 p2 s )(at level 49). 
-Notation "  a ->' c " := (elem a c) (at level 50).
-
+Notation "  a '=*' p1 p2 '{' s '}' ":= (lambda a p1 p2 s )(at level 49).
+Notation " /* s *\ " := (comentarii s ) (at level 48).
 Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
-      "ok" :n= "ok" +' 1
+      /* "ok" :n= "ok" +' 1 *\
 }.
 Check While ( "i" =>' 9 ) { "ok" :n= "dada" } .
 Check "k"++'.
@@ -133,20 +135,20 @@ Check decl_templates "tip" ;*
                           }while* ( "ok" =>' 0);;
                           apelare_functie "da" [ "a";"b" ]
                         ).
-Check nil.
-Check ( (num 1) ->' ( (num 2) ->' nil)).
+Check nill.
+Check (elem nat 5) (nill nat).
 
 
 Definition Env := Var -> Values.
-Definition env1 : Env := fun x => undecl.
+Definition env1 : Env := fun x => err_undecl.
 Definition check_eq_over_types (t1 : Values)(t2 : Values) : bool :=
   match t1 with
-| assign => match t2 with 
-                   | assign => true
+| err_assign => match t2 with 
+                   | err_assign => true
                    | _ => false
                    end
-| undecl => match t2 with 
-                   | undecl => true
+| err_undecl => match t2 with 
+                   | err_undecl => true
                    | _ => false
                    end
 | default => match t2 with 
@@ -162,25 +164,21 @@ Definition check_eq_over_types (t1 : Values)(t2 : Values) : bool :=
                    | _ => false
                    end
   end.
-Definition update (env : Env ) (x : string) (v : Values) : Env :=
-  fun y =>
-    if(eqb y x)
-    then
-      if(andb (check_eq_over_types undecl (env y)) (negb (check_eq_over_types default v)))
-      then undecl
-        else
-        if(andb (check_eq_over_types undecl (env y)) (check_eq_over_types default v))
-        then default
-          else
-          if(orb (check_eq_over_types default (env y)) (check_eq_over_types v (env y)))
-          then v
-            else assign
-    else (env y).
+Definition update (env : Env) ( x: string ) ( v : Values ) : Env :=
+fun y =>
+ if(string_beq x y)
+  then 
+      if ( andb (check_eq_over_types (env y) err_assign ) true )
+                       then v
+         else if (andb ( check_eq_over_types (env y) v) true ) then v else
+            if (andb (check_eq_over_types (env y) default) true ) then v else err_assign
+  else (env y).
+
 Definition plus_eroareNat (n1 n2 : eroareNat) : eroareNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
-    | num v1, num v2 => num (v1 + v2)
+    | num v1, num v2 =>  (v1 + v2)
     end.
 
 Definition min_eroareNat (n1 n2 : eroareNat) : eroareNat :=
@@ -189,14 +187,14 @@ Definition min_eroareNat (n1 n2 : eroareNat) : eroareNat :=
     | _, error_nat => error_nat
     | num n1, num n2 => if Nat.ltb n1 n2
                         then error_nat
-                        else num (n1 - n2)
+                        else  (n1 - n2)
     end.
 
 Definition mul_eroareNat (n1 n2 : eroareNat) : eroareNat :=
   match n1, n2 with
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
-    | num v1, num v2 => num (v1 * v2)
+    | num v1, num v2 =>  (v1 * v2)
     end.
 
 Definition div_eroareNat (n1 n2 : eroareNat) : eroareNat :=
@@ -204,7 +202,7 @@ Definition div_eroareNat (n1 n2 : eroareNat) : eroareNat :=
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
     | _, num 0 => error_nat
-    | num v1, num v2 => num (Nat.div v1 v2)
+    | num v1, num v2 =>  (Nat.div v1 v2)
     end.
 
 Definition proc_eroareNat (n1 n2 : eroareNat) : eroareNat :=
@@ -212,7 +210,7 @@ Definition proc_eroareNat (n1 n2 : eroareNat) : eroareNat :=
     | error_nat, _ => error_nat
     | _, error_nat => error_nat
     | _, num 0 => error_nat
-    | num v1, num v2 => num (v1 - v2 * (Nat.div v1 v2))
+    | num v1, num v2 => (v1 - v2 * (Nat.div v1 v2))
     end.
 Fixpoint aeval_fun (a : AExp) (env : Env) : eroareNat :=
   match a with
@@ -260,7 +258,9 @@ Inductive aeval : AExp -> Env -> eroareNat -> Prop :=
     n = (proc_eroareNat i1 i2) ->
     a1 %' a2 =[sigma]=> n
 where "a =[ sigma ]=> n" := (aeval a sigma n).
-Definition env : Env := fun x => undecl.
+Definition env : Env := fun x => err_undecl.
+
+Compute aeval (1+'5) env error_nat.
 Example substract_error : 1 -' 5 =[ env ]=> error_nat.
 Proof.
   eapply substract.
@@ -268,45 +268,54 @@ Proof.
   - apply const.
   - simpl. reflexivity.
 Qed.
+Example add1 : 1 +' 5 =[ env ]=> 6.
+Proof.
+    eapply add.
+      -eapply const.
+      -eapply const.
+      - simpl. reflexivity.
+Qed.
 
+Require Import Nat.
 Definition lt_eroareBool (n1 n2 : eroareNat) : eroareBool :=
   match n1, n2 with
     | error_nat, _ => error_bool
     | _, error_nat => error_bool
-    | num v1, num v2 => boolean (Nat.ltb v1 v2)
+    | num v1, num v2 => ( leb v1 v2 )
     end.
+Compute lt_eroareBool 3 4.
 Definition gt_eroareBool (n1 n2 : eroareNat) : eroareBool :=
   match n1, n2 with
     | error_nat, _ => error_bool
     | _, error_nat => error_bool
-    | num v1, num v2 => boolean (Nat.ltb v2 v1)
+    | num v1, num v2 => (Nat.ltb v2 v1)
     end.
+
 Definition eq_eroareBool (n1 n2 : eroareNat) : eroareBool :=
   match n1, n2 with
     | error_nat, _ => error_bool
     | _, error_nat => error_bool
-    | num v1, num v2 => boolean (Nat.eqb v2 v1)
+    | num v1, num v2 =>  (Nat.eqb v2 v1)
     end.
 Definition not_eroareBool (n :eroareBool) : eroareBool :=
   match n with
     | error_bool => error_bool
-    | boolean v => boolean (negb v)
+    | boolean v =>  (negb v)
     end.
 
 Definition and_eroareBool (n1 n2 : eroareBool) : eroareBool :=
   match n1, n2 with
     | error_bool, _ => error_bool
     | _, error_bool => error_bool
-    | boolean v1, boolean v2 => boolean (andb v1 v2)
+    | boolean v1, boolean v2 =>(andb v1 v2)
     end.
 
 Definition or_eroareBool (n1 n2 : eroareBool) : eroareBool :=
   match n1, n2 with
     | error_bool, _ => error_bool
     | _, error_bool => error_bool
-    | boolean v1, boolean v2 => boolean (orb v1 v2)
+    | boolean v1, boolean v2 =>  (orb v1 v2)
     end.
-
 Fixpoint beval_fun (a : BExp) (envnat : Env) : eroareBool :=
   match a with
   | btrue => boolean true
@@ -322,14 +331,13 @@ Fixpoint beval_fun (a : BExp) (envnat : Env) : eroareBool :=
   | bnot b1 => (not_eroareBool (beval_fun b1 envnat))
   | band b1 b2 => (and_eroareBool (beval_fun b1 envnat) (beval_fun b2 envnat))
   | bor b1 b2 => (or_eroareBool (beval_fun b1 envnat) (beval_fun b2 envnat))
-  
 end.
 
 Reserved Notation "B ={ S }=> B'" (at level 70).
 Inductive beval : BExp -> Env -> eroareBool -> Prop :=
 | b_error: forall sigma, berror  ={ sigma }=> error_bool
-| b_true : forall sigma, btrue ={ sigma }=> boolean true
-| b_false : forall sigma, bfalse ={ sigma }=> boolean false
+| b_true : forall sigma, btrue ={ sigma }=>  true
+| b_false : forall sigma, bfalse ={ sigma }=>  false
 | b_var : forall v sigma, bvar v ={ sigma }=>  match (sigma v) with
                                                 | booleans x => x
                                                 | _ => error_bool
@@ -374,46 +382,6 @@ Proof.
   - simpl. reflexivity.
 Qed.
 
-Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
-Inductive eval : Stmt -> Env -> Env -> Prop :=
-| e_nat_decl: forall a i x sigma sigma',
-   a =[ sigma ]=> i ->
-   sigma' = (update sigma x (naturals i)) ->
-   (x :n= a) -{ sigma }-> sigma'
-| e_nat_assign: forall a i x sigma sigma',
-    a =[ sigma ]=> i ->
-    sigma' = (update sigma x (naturals i)) ->
-    (x :n= a) -{ sigma }-> sigma'
-| e_bool_decl: forall a i x sigma sigma',
-   a ={ sigma }=> i ->
-   sigma' = (update sigma x (booleans i)) ->
-   (x :b= a) -{ sigma }-> sigma'
-| e_bool_assign: forall a i x sigma sigma',
-    a ={ sigma }=> i ->
-    sigma' = (update sigma x (booleans i)) ->
-    (x :b= a) -{ sigma }-> sigma'
-| e_seq : forall s1 s2 sigma sigma1 sigma2,
-    s1 -{ sigma }-> sigma1 ->
-    s2 -{ sigma1 }-> sigma2 ->
-    (s1 ;; s2) -{ sigma }-> sigma2
-| e_if_then : forall b s sigma,
-    ifthen b s -{ sigma }-> sigma
-| e_if_then_elsetrue : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> boolean true ->
-    s1 -{ sigma }-> sigma' ->
-    ifelse b s1 s2 -{ sigma }-> sigma' 
-| e_if_then_elsefalse : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> boolean false ->
-    s2 -{ sigma }-> sigma' ->
-    ifelse b s1 s2 -{ sigma }-> sigma' 
-| e_whilefalse : forall b s sigma,
-    b ={ sigma }=> boolean false ->
-    while b s -{ sigma }-> sigma
-| e_whiletrue : forall b s sigma sigma',
-    b ={ sigma }=> boolean true ->
-    (s ;; while b s) -{ sigma }-> sigma' ->
-    while b s -{ sigma }-> sigma'
-where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
 
 Scheme Equality for Memory.
 Definition update_env (env: EnvMem) (x: string) (n: Memory) : EnvMem :=
@@ -428,17 +396,17 @@ Definition update_mem (mem : MemLayer) (env : EnvMem) (x : string) (type : Memor
   fun y =>
     if(andb (Memory_beq y type)(Memory_beq (env x) type))
     then
-      if(andb (check_eq_over_types undecl (mem y)) (negb (check_eq_over_types default v)))
-        then undecl
+      if(andb (check_eq_over_types err_undecl (mem y)) (negb (check_eq_over_types default v)))
+        then err_undecl
       else
-        if(andb (check_eq_over_types undecl (mem y)) (check_eq_over_types default v))
+        if(andb (check_eq_over_types err_undecl (mem y)) (check_eq_over_types default v))
           then default
         else
           if(orb (check_eq_over_types default (mem y)) (check_eq_over_types v (mem y)))
               then v
-          else assign
+          else err_assign
     else (mem y).
-Definition mem : MemLayer := fun x => undecl.
+Definition mem : MemLayer := fun x => err_undecl.
 
 Check mem.
 Compute update_env envMem "x" mem_default.
@@ -449,3 +417,271 @@ Compute ( update_env envMem  "x" (offset 5)) "x".
 Check envMem.
 Compute (update_mem mem envMem "sal" mem_default default).
 Compute (update_mem mem ( update_env envMem  "x" (offset 5)) "x" mem_default (naturals (num 5))).
+
+Definition update_list_globale ( l : list Var ) ( x : Var )
+    : list Var := l++ [x].
+Definition update_list_functii ( l : list Var ) ( x : Var )  
+    : list Var := l++  [x].
+Fixpoint search_functie ( l:list Var ) (x : Var) : eroareBool :=
+  match l with
+  | [] => boolean false
+  | y :: l => if ( andb (string_beq y x ) true ) then boolean true
+                else
+                  search_functie l x
+end.
+Compute search_functie ["a" ; "b" ; "c" ] "c". 
+Compute update_list_globale ["a";"b"] "c". 
+Definition parametrii1 := Parametrii.
+Definition parametrii2 := Parametrii.
+
+Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
+Inductive eval : Stmt -> Env -> Env -> Prop :=
+| e_nat_assign: forall a i x sigma sigma',
+   a =[ sigma ]=> i ->
+   sigma' = (update sigma x (naturals i)) ->
+   (nat_assign x a) -{ sigma }-> sigma'
+| e_nat_decl: forall x sigma sigma',
+    sigma' = (update sigma x err_assign) ->
+    (nat_decl x) -{ sigma }-> sigma'
+| e_nat_decl_assign: forall a i x sigma sigma',
+   a =[ sigma ]=> i ->
+   sigma' = (update sigma x (naturals i)) ->
+   (nat_decl_assign x a) -{ sigma }-> sigma'
+
+| e_bool_decl: forall x sigma sigma',
+   sigma' = (update sigma x err_undecl) ->
+   (bool_decl x) -{ sigma }-> sigma'
+| e_bool_assign: forall a i x sigma sigma',
+    a ={ sigma }=> i ->
+    sigma' = (update sigma x (booleans i)) ->
+    (bool_assign x a) -{ sigma }-> sigma'
+| e_bool_decl_assign: forall a i x sigma sigma',
+    a ={ sigma }=> i ->
+    sigma' = (update sigma x (booleans i)) ->
+    (bool_decl_assign x a) -{ sigma }-> sigma'
+
+| e_seq : forall s1 s2 sigma sigma1 sigma2,
+    s1 -{ sigma }-> sigma1 ->
+    s2 -{ sigma1 }-> sigma2 ->
+    (s1 ;; s2) -{ sigma }-> sigma2
+| e_if_then : forall b s sigma sigma',
+    b ={ sigma }=> true ->
+    s -{ sigma }-> sigma' ->
+    ifthen b s -{ sigma }-> sigma
+| e_if_then_elsetrue : forall b s1 s2 sigma sigma',
+    b ={ sigma }=>true ->
+    s1 -{ sigma }-> sigma' ->
+    ifelse b s1 s2 -{ sigma }-> sigma' 
+| e_if_then_elsefalse : forall b s1 s2 sigma sigma',
+    b ={ sigma }=> boolean false ->
+    s2 -{ sigma }-> sigma' ->
+    ifelse b s1 s2 -{ sigma }-> sigma' 
+| e_whilefalse : forall b s sigma,
+    b ={ sigma }=> false ->
+    while b s -{ sigma }-> sigma
+| e_whiletrue : forall b s sigma sigma',
+    b ={ sigma }=>  true ->
+    (s ;; while b s) -{ sigma }-> sigma' ->
+    while b s -{ sigma }-> sigma'
+| e_lambda : forall x s parametrii1 parametrii2 sigma1 sigma2,
+    s -{ sigma1 }-> sigma2 ->
+    (lambda x parametrii1 parametrii2 s) -{ sigma1 }-> sigma2
+| e_apelare : forall x b lista parametrii1 sigma1 sigma2,
+    b = search_functie lista x ->
+    b = true ->
+    (apelare_functie x parametrii1) -{ sigma1 }-> sigma2
+| e_coments : forall s sigma1 sigma2 ,
+    /* s *\ -{ sigma1 }-> sigma2 
+where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
+
+Definition update_functie ( s : Stmt) ( env env' : Env ) : Prop :=
+  match s with
+  | _ => (eval s env env')
+end.
+
+Reserved Notation "S -*{ Sigma }*-> Sigma'" (at level 60).
+Inductive evalprograms : Programs -> Env -> Env -> Prop :=
+| e_decl_global: forall x list_glb' list_glb sigma sigma',
+    sigma' = (update sigma x (naturals (num 0))) ->
+    list_glb' = (update_list_globale list_glb x) ->
+    (decl_var_globale x) -*{ sigma }*-> sigma'
+| e_decl_functie: forall x s Parametrii y list_functii list_functii' sigma sigma',
+    s -{ sigma }-> sigma' ->
+    list_functii' = ( update_list_functii list_functii x)->
+    (decl_functie x Parametrii s y) -*{ sigma }*-> sigma'
+| e_decl_functie_main : forall s sigma sigma',
+    s -{ sigma }-> sigma' ->
+    (decl_functie_main s ) -*{ sigma }*-> sigma'
+| e_seq_prg : forall s1 s2 sigma sigma1 sigma2,
+    s1 -*{ sigma }*-> sigma1 ->
+    s2 -*{ sigma1 }*-> sigma2 ->
+    (s1 ;* s2) -*{ sigma }*-> sigma2
+where "s -*{ sigma }*-> sigma'" := (evalprograms s sigma sigma').
+
+Definition coada_push ( n : Set ) ( c : coada n) ( el : n) : coada n:=
+  match c with
+  | _ => (elem n el c )
+  end.
+Definition coada_pop1 ( n : Set ) ( c : coada n) : coada n:=
+  match c with
+  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => elem n x ( elem n y (nill n))
+  | elem _ x ( elem _ y (nill _ )) => elem n x (nill n) 
+  | elem _ x ( nill _ ) => nill n  
+  | elem _ x c' => c'
+  | nill _ => nill n
+end.
+Fixpoint coada_length (n : Set) ( c : coada n) : nat :=
+  match c with
+  | nill _ => 0
+  | elem _ x c' => 1 + ( coada_length n c')
+  end.
+Definition coada_first ( n : Set) (err : n) (c : coada n) : n :=
+  match c with 
+  | elem _ x c' => x
+  | nill _ => err
+end.
+Definition coada_last ( n : Set) (err : n) (c : coada n) : n :=
+  match c with
+  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => z
+  | elem _ x ( elem _ y (nill _ )) => y 
+  | elem _ x ( nill _ ) => x
+  | elem _ x c' => x
+  | nill _ => err
+end.
+
+Compute (coada_push nat ( nill nat ) 4).
+Compute (coada_push nat (coada_push nat ( nill nat ) 4) 5).
+Compute coada_pop1 nat (coada_push nat (coada_push nat ( (coada_push nat ( nill nat )3) ) 4) 5).
+Compute coada_length nat (coada_push nat (coada_push nat ( nill nat ) 4) 5).
+Compute coada_first eroareNat error_nat (coada_push eroareNat (coada_push eroareNat ( nill eroareNat ) (num 4)) (num 5)).
+Compute coada_last eroareNat error_nat (coada_push eroareNat (coada_push eroareNat ( nill eroareNat ) (num 4)) (num 5)).
+
+
+Definition ex_stmt := 
+  int "i";; 
+  int "j";;
+  (int* "s" ::n= 0 );; 
+  ("i":n=0);;
+  ("j":n=1);;
+  ifthen ( "i" <=' "j") 
+    ("s":n=18 );; 
+  /* "s":n=19 *\.
+Example eval_ex :
+  exists state, ex_stmt -{ env }-> state /\ state "s" = (naturals 18).
+Proof.
+  eexists.
+  split.
+  +unfold ex_stmt.
+    eapply e_seq.
+      -eapply e_seq.  
+        -- eapply e_seq.
+          --- eapply e_seq.  
+             ++ eapply e_seq.
+              +++ eapply e_seq.
+                ++++ eapply e_nat_decl. eauto.
+                ++++ eapply e_nat_decl. eauto.
+              +++ eapply e_nat_decl_assign.
+                ++++ eapply const.
+                ++++ split.
+            ++ eapply e_nat_assign. 
+              +++ eapply const.
+              +++ split.
+         --- eapply e_nat_assign.
+           +++ eapply const.
+           +++ split.
+       -- eapply e_if_then.
+           ++eapply b_lessthan.
+             +++eapply var. 
+             +++eapply var.
+             +++ simpl. reflexivity.
+      ++ eapply e_nat_assign. eapply const. eauto.
+     - eapply e_coments.
+  +Abort.
+
+Definition max1 :=
+  intglobal "n";*
+  decl_functie "da" [ "ok";"da" ] ( ("ok":n=3) ;; ("ok":n="ok"-'1) ) (naturals (num 1)) ;*
+  intglobal "ok" ;*
+  decl_functie_main ( (int "a") ;;
+                       ("a" :n=3 );;
+                       lambda "lbd" [] [] ("a":n="a"-'1);;  
+                      Do { 
+                          "a":n="a"-'1
+                       }while* ( "a" <=' 0);;
+                       apelare_functie "da" [ "a";"b" ]
+                       ).
+
+Definition state0 := fun (x:Var) => err_undecl.
+Example eval_max1 : 
+ exists state, max1 -*{ state0 }*-> state /\ state "a" = naturals (num 2).
+Proof.
+  eexists.
+  split.
+  - unfold max1. 
+    eapply e_seq_prg.
+    ++ eapply e_seq_prg.
+        +++ eapply e_decl_global;eauto.
+        +++ eapply e_decl_functie; eauto. eapply e_seq. 
+            ++++ eapply e_nat_assign.
+                +++++ eapply const.
+                +++++ split.
+            ++++ eapply e_nat_assign.
+                +++++ eapply substract.
+                 -- eapply var.
+                 -- eapply const.
+                 -- split.
+                +++++ split.
+   ++ eapply e_seq_prg.
+      +++ simpl. eapply e_decl_global; eauto.
+      +++ eapply e_decl_functie_main. 
+          eapply e_seq.
+          ++++ eapply e_seq.
+            +++++ eapply e_seq.
+              ++++++eapply e_seq.
+              +++++++ eapply e_nat_decl.
+                ++++++++ simpl. split. 
+              +++++++ eapply e_nat_assign.
+                    ---- eapply const.
+                    ---- split.
+             ++++++ eapply e_lambda. eapply e_nat_assign.
+                   +++++++ eapply substract.
+                    ++++++++ eapply var.
+                    ++++++++ eapply const.
+                    ++++++++ split.
+                   +++++++ split.
+             +++++ eapply e_seq.
+                ++++++ eapply e_nat_assign.
+                    +++++++ eapply substract.
+                      ++++++++ eapply var. 
+                      ++++++++ eapply const.
+                      ++++++++ split.
+                    +++++++ split.
+               ++++++ eapply e_whilefalse.
+                    +++++++ eapply b_lessthan.
+                    +++++++++ eapply var.
+                    +++++++++ eapply const.
+                    +++++++++ simpl. reflexivity.
+              ++++ eapply e_apelare. eauto. 
+               +++++  Abort.
+
+Inductive string  :=
+  | EmptyString : string
+  | String : string -> string.
+
+Definition s_concat ( x1 x2 : String.string ) := append x1 x2.
+Definition s_copy ( x1 x2 : String.string ) :=
+  match x1 with
+  | _ => append String.EmptyString x2
+end.
+Definition s_equal ( x1 x2 : String.string ) :=
+  match x1 with
+  | _ => if ( string_beq x1 x2 ) then true else false
+end.
+
+Definition s_length (x1 : String.string) := String.length x1.
+Compute (s_concat "d" "nu").
+Compute (s_copy "d" "nu").  
+Compute (s_equal "da" "nu").
+Compute s_length "aaaaaaa". 
+
+
