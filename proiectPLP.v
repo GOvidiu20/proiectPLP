@@ -425,10 +425,10 @@ Definition update_list_locale ( l : list Var ) ( x : Var )
     : list Var := l++ [x].
 Definition update_list_functii ( l : list Var ) ( x : Var )  
     : list Var := l++ [x].
-Fixpoint search_functie ( l:list Var ) (x : Var) : eroareBool :=
+Fixpoint search_functie ( l:list Var ) (x : Var) : bool :=
   match l with
-  | [] => boolean false
-  | y :: l => if ( andb (string_beq y x ) true ) then boolean true
+  | [] => false
+  | y :: l => if ( andb (string_beq y x ) true ) then true
                 else
                   search_functie l x
 end.
@@ -437,8 +437,36 @@ Compute update_list_globale ["a";"b"] "c".
 Definition parametrii1 := Parametrii.
 Definition parametrii2 := Parametrii.
 
-
-
+ Inductive Instruction :=
+| push_stmt : Stmt -> Instruction
+| pop_stmt: Stmt -> Instruction.
+Definition Stackf := list Stmt.
+Definition take_stmt (i : Instruction) (s : Stmt): Stmt :=
+  match i with
+  | pop_stmt c => c
+  | _ => s
+end.
+Definition compile1 (e : Stmt) : list Instruction :=
+  match e with
+  | nat_decl a => [push_stmt (nat_decl a)]
+  | nat_assign a x => [push_stmt (nat_assign a x)]
+  | nat_decl_assign a x=> [push_stmt (nat_decl_assign a x)]
+  | bool_decl a => [push_stmt (bool_decl a)]
+  | bool_assign a x=> [push_stmt (bool_assign a x)]
+  | bool_decl_assign a x=> [push_stmt (bool_decl_assign a x)]
+  | apelare_functie x c => [push_stmt (apelare_functie x c)]
+  | sequence a b => [push_stmt (sequence a b)]
+  | while b c=> [push_stmt (while b c)]
+  | ifthen b c => [push_stmt (ifthen b c)]
+  | ifelse b a c => [push_stmt (ifelse b a c)]
+  | lambda x a b c => [push_stmt (lambda x a b c)]
+  | comentarii c => [push_stmt (comentarii c)]
+end.
+Definition compile2 ( l : list Instruction) (i : Instruction) : Instruction := 
+  match l with
+  | x :: l => x
+  | [] => i
+end.
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
 Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_nat_assign: forall a i x sigma sigma',
@@ -491,103 +519,15 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_lambda : forall x s parametrii1 parametrii2 sigma1 sigma2,
     s -{ sigma1 }-> sigma2 ->
     (lambda x parametrii1 parametrii2 s) -{ sigma1 }-> sigma2
-| e_apelare : forall x b lista parametrii1 sigma1 sigma2,
+| e_apelare : forall x b s stmt instruc instruc1 lista_instruc lista parametrii1 sigma1 sigma2,
     b = search_functie lista x ->
-    (* b = true -> *)
+    instruc = compile2 lista_instruc instruc1 ->
+    stmt = take_stmt instruc s->
+    stmt -{ sigma1 }-> sigma2 ->
     (apelare_functie x parametrii1) -{ sigma1 }-> sigma2
 | e_coments : forall s sigma1 sigma2 ,
     /* s *\ -{ sigma1 }-> sigma2 
 where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
-
-(* Inductive Instruction :=
-| push_stmt : Stmt -> Instruction.
-Inductive run_Instruction :=
-| compil_stmt : Stmt -> run_Instruction.
-Definition Stackf := list Stmt.
-Definition add_instruction (i : Instruction) (stack : Stackf) : Stackf :=
-  match i with
-  | push_stmt c => (c :: stack)
-  end.
-Definition compil_Instruction (i : run_Instruction) (env env1 :Env)  : Prop :=
-  match i with
-  | compil_stmt s => ( s -{ env }-> env1)
-end. 
-Definition compile (e : Stmt) : list Instruction :=
-  match e with
-  | nat_decl a => []
-  | nat_assign a x => []
-  | nat_decl_assign a x=> []
-  | bool_decl a => []
-  | bool_assign a x=> []
-  | bool_decl_assign a x=> []
-  | apelare_functie x c => []
-  | sequence a b => [push_stmt a]
-  | while b c=> [push_stmt c]
-  | ifthen b c => [push_stmt c]
-  | ifelse b a c => [push_stmt c]
-  | lambda x a b c => [push_stmt c]
-  | comentarii c => [push_stmt c]
-end.
-Reserved Notation "S -f{ Sigma }f-> Sigma'" (at level 60).
-Inductive eval_functii : Stmt -> Env -> Env -> Prop :=
-| e_nat_assign1: forall a i x sigma sigma',
-   a =[ sigma ]=> i ->
-   sigma' = (update sigma x (naturals i)) ->
-   (nat_assign x a) -f{ sigma }f-> sigma'
-| e_nat_decl1: forall x sigma sigma',
-    sigma' = (update sigma x err_assign) ->
-    (nat_decl x) -f{ sigma }f-> sigma'
-| e_nat_decl_assign1: forall a i x sigma sigma',
-   a =[ sigma ]=> i ->
-   sigma' = (update sigma x (naturals i)) ->
-   (nat_decl_assign x a) -f{ sigma }f-> sigma'
-
-| e_bool_decl1: forall x sigma sigma',
-   sigma' = (update sigma x err_undecl) ->
-   (bool_decl x) -f{ sigma }f-> sigma'
-| e_bool_assign1: forall a i x sigma sigma',
-    a ={ sigma }=> i ->
-    sigma' = (update sigma x (booleans i)) ->
-    (bool_assign x a) -f{ sigma }f-> sigma'
-| e_bool_decl_assign1: forall a i x sigma sigma',
-    a ={ sigma }=> i ->
-    sigma' = (update sigma x (booleans i)) ->
-    (bool_decl_assign x a) -f{ sigma }f-> sigma'
-
-| e_seq1 : forall s1 s2 sigma sigma1 sigma2,
-    s1 -{ sigma }-> sigma1 ->
-    s2 -{ sigma1 }-> sigma2 ->
-    (s1 ;; s2) -f{ sigma }f-> sigma2
-| e_if_then1 : forall b s sigma sigma',
-    b ={ sigma }=> true ->
-    s -{ sigma }-> sigma' ->
-    ifthen b s -f{ sigma }f-> sigma
-| e_if_then_elsetrue1 : forall b s1 s2 sigma sigma',
-    b ={ sigma }=>true ->
-    s1 -{ sigma }-> sigma' ->
-    ifelse b s1 s2 -f{ sigma }f-> sigma' 
-| e_if_then_elsefalse1 : forall b s1 s2 sigma sigma',
-    b ={ sigma }=> boolean false ->
-    s2 -{ sigma }-> sigma' ->
-    ifelse b s1 s2 -f{ sigma }f-> sigma' 
-| e_whilefalse1 : forall b s sigma,
-    b ={ sigma }=> false ->
-    while b s -f{ sigma }f-> sigma
-| e_whiletrue1 : forall b s sigma sigma',
-    b ={ sigma }=>  true ->
-    (s ;; while b s) -f{ sigma }f-> sigma' ->
-    while b s -f{ sigma }f-> sigma'
-| e_lambda1 : forall x s parametrii1 parametrii2 sigma1 sigma2,
-    s -{ sigma1 }-> sigma2 ->
-    (lambda x parametrii1 parametrii2 s) -f{ sigma1 }f-> sigma2
-| e_apelare1 : forall x b lista parametrii1 stack sigma1 sigma2,
-    b = search_functie lista x ->
-     compil_Instruction stack sigma1 sigma2 ->
-    (apelare_functie x parametrii1) -f{ sigma1 }f-> sigma2
-| e_coments1 : forall s sigma1 sigma2 ,
-    /* s *\ -f{ sigma1 }f-> sigma2 
-where "s -f{ sigma }f-> sigma'" := (eval_functii s sigma sigma').
- *)
 
 Reserved Notation "S -*{ Sigma }*-> Sigma'" (at level 60).
 Inductive evalprograms : Programs -> Env -> Env -> Prop :=
@@ -595,9 +535,9 @@ Inductive evalprograms : Programs -> Env -> Env -> Prop :=
     sigma' = (update sigma x (naturals (num 0))) ->
     list_glb' = (update_list_globale list_glb x) ->
     (decl_var_globale x) -*{ sigma }*-> sigma'
-| e_decl_functie: forall x s Parametrii  y list_functii list_functii' sigma sigma',
-    s -{ sigma }-> sigma' -> 
-    (* stack2= compile s -> *)
+| e_decl_functie: forall x s Parametrii stack y list_functii list_functii' sigma sigma',
+    (* s -{ sigma }-> sigma' -> *) 
+    stack = compile1 s -> 
     list_functii' = ( update_list_functii list_functii x)->
     (decl_functie x Parametrii s y) -*{ sigma }*-> sigma'
 | e_decl_functie_main : forall s sigma sigma',
@@ -691,12 +631,11 @@ Proof.
 
 Definition max1 :=
   intglobal "n";*
-  decl_functie "da" [ "ok";"da" ] ( ("ok":n=3) ;; ("ok":n="ok"-'1) ) (naturals (num 1)) ;*
+  decl_functie "da" [ "ok";"da" ] ( ( ifthen("n"=='0)("ok":n=3)) ) (naturals (num 1)) ;*
   intglobal "ok" ;*
   decl_functie_main ( (int "a") ;;
                        ("a" :n=3 );;
                        lambda "lbd" [] [] ("a":n="a"-'1);;  
-                      
                        apelare_functie "da" [ "a";"b" ]
                        ).
 
@@ -710,16 +649,9 @@ Proof.
     ++ eapply e_seq_prg.
         +++ eapply e_decl_global;eauto.
         +++ eapply e_decl_functie; eauto.
-          ++++ eapply e_seq.
-            +++++ eapply e_nat_assign.
+            (* +++++ eapply e_nat_assign.
               ++++++ eapply const.
-              ++++++ split.
-             +++++ eapply e_nat_assign.
-              ++++++ eapply substract.
-                -- eapply var.
-                -- eapply const.
-                -- split.
-              ++++++ split.
+              ++++++ split. *)
     ++ eapply e_seq_prg.
       +++ simpl. eapply e_decl_global; eauto.
       +++ eapply e_decl_functie_main. 
@@ -739,7 +671,9 @@ Proof.
                    +++++++ split.
              ++++ eapply e_apelare.
                     +++++++ split.
-Abort.
+                    +++++++ split.
+                    +++++++ split.
+                    +++++++ Abort.
 
 Inductive string  :=
   | EmptyString : string
