@@ -425,6 +425,8 @@ Definition update_list_locale ( l : list Var ) ( x : Var )
     : list Var := l++ [x].
 Definition update_list_functii ( l : list Var ) ( x : Var )  
     : list Var := l++ [x].
+Definition update_template ( l : list Var ) ( x : Var )  
+    : list Var := l++ [x].
 Fixpoint search_functie ( l:list Var ) (x : Var) : bool :=
   match l with
   | [] => false
@@ -549,6 +551,9 @@ Inductive evalprograms : Programs -> Env -> Env -> Prop :=
     s1 -*{ sigma }*-> sigma1 ->
     s2 -*{ sigma1 }*-> sigma2 ->
     (s1 ;* s2) -*{ sigma }*-> sigma2
+| e_template : forall x sigma' sigma lista lista' ,
+    lista' = (update_template lista x) ->
+    decl_templates x -*{ sigma }*-> sigma'
 where "s -*{ sigma }*-> sigma'" := (evalprograms s sigma sigma').
 
 Definition coada_push ( n : Set ) ( c : coada n) ( el : n) : coada n:=
@@ -597,7 +602,10 @@ Definition ex_stmt :=
   ("i":n=0);;
   ("j":n=1);;
   ifthen ( "i" <=' "j") 
-    ("s":n=18 );; 
+    ("s":n=18 );;
+  Do 
+  { "s" :n= 10 }
+   while* ( "j"<='"i");;
   /* "s":n=19 *\.
 Example eval_ex :
   exists state, ex_stmt -{ env }-> state /\ state "s" = (naturals 18).
@@ -611,23 +619,33 @@ Proof.
           --- eapply e_seq.  
              ++ eapply e_seq.
               +++ eapply e_seq.
+               +++++ eapply e_seq.
                 ++++ eapply e_nat_decl. eauto.
                 ++++ eapply e_nat_decl. eauto.
-              +++ eapply e_nat_decl.
+              +++++ eapply e_nat_decl.
                 ++++ split.
-            ++ eapply e_nat_assign. 
-              +++ eapply const.
-              +++ split.
-         --- eapply e_nat_assign.
+            +++ eapply e_nat_assign. 
+              ++++ eapply const.
+              ++++ split.
+         ++ eapply e_nat_assign.
            +++ eapply const.
            +++ split.
-       -- eapply e_if_then.
+       --- eapply e_if_then.
            ++eapply b_lessthan.
              +++eapply var. 
              +++eapply var.
              +++ simpl. reflexivity.
       ++ eapply e_nat_assign. eapply const. eauto.
-     - eapply e_coments.  
+    -- eapply e_seq.
+     ++ eapply e_nat_assign.
+        +++ eapply const.
+        +++ split.
+    ++ eapply e_whilefalse.
+      +++ eapply b_lessthan.
+        +++++ eapply var.
+        +++++ eapply var.
+        +++++ simpl. reflexivity.
+     - eapply e_coments.
   +Abort.
 
 Definition max1 :=
