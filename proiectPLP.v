@@ -446,27 +446,28 @@ Definition take_stmt (i : Instruction) (s : Stmt): Stmt :=
   | pop_stmt c => c
   | _ => s
 end.
-Definition compile1 (e : Stmt) : list Instruction :=
+Definition compile1 (e : Stmt) (stack : list Instruction ): list Instruction :=
   match e with
-  | nat_decl a => [push_stmt (nat_decl a)]
-  | nat_assign a x => [push_stmt (nat_assign a x)]
-  | nat_decl_assign a x=> [push_stmt (nat_decl_assign a x)]
-  | bool_decl a => [push_stmt (bool_decl a)]
-  | bool_assign a x=> [push_stmt (bool_assign a x)]
-  | bool_decl_assign a x=> [push_stmt (bool_decl_assign a x)]
-  | apelare_functie x c => [push_stmt (apelare_functie x c)]
-  | sequence a b => [push_stmt (sequence a b)]
-  | while b c=> [push_stmt (while b c)]
-  | ifthen b c => [push_stmt (ifthen b c)]
-  | ifelse b a c => [push_stmt (ifelse b a c)]
-  | lambda x a b c => [push_stmt (lambda x a b c)]
-  | comentarii c => [push_stmt (comentarii c)]
+  | nat_decl a => stack ++ [push_stmt (nat_decl a)]
+  | nat_assign a x => stack ++[push_stmt (nat_assign a x)]
+  | nat_decl_assign a x=> stack ++[push_stmt (nat_decl_assign a x)]
+  | bool_decl a => stack ++[push_stmt (bool_decl a)]
+  | bool_assign a x=> stack ++[push_stmt (bool_assign a x)]
+  | bool_decl_assign a x=> stack ++[push_stmt (bool_decl_assign a x)]
+  | apelare_functie x c => stack ++[push_stmt (apelare_functie x c)]
+  | sequence a b => stack ++[push_stmt (sequence a b)]
+  | while b c=> stack ++[push_stmt (while b c)]
+  | ifthen b c =>stack ++ [push_stmt (ifthen b c)]
+  | ifelse b a c => stack ++[push_stmt (ifelse b a c)]
+  | lambda x a b c => stack ++[push_stmt (lambda x a b c)]
+  | comentarii c =>stack ++ [push_stmt (comentarii c)]
 end.
 Definition compile2 ( l : list Instruction) (i : Instruction) : Instruction := 
   match l with
   | x :: l => x
   | [] => i
 end.
+
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
 Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_nat_assign: forall a i x sigma sigma',
@@ -521,6 +522,7 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
     (lambda x parametrii1 parametrii2 s) -{ sigma1 }-> sigma2
 | e_apelare : forall x b s stmt instruc instruc1 lista_instruc lista parametrii1 sigma1 sigma2,
     b = search_functie lista x ->
+    b =true ->
     instruc = compile2 lista_instruc instruc1 ->
     stmt = take_stmt instruc s->
     stmt -{ sigma1 }-> sigma2 ->
@@ -535,9 +537,9 @@ Inductive evalprograms : Programs -> Env -> Env -> Prop :=
     sigma' = (update sigma x (naturals (num 0))) ->
     list_glb' = (update_list_globale list_glb x) ->
     (decl_var_globale x) -*{ sigma }*-> sigma'
-| e_decl_functie: forall x s Parametrii stack y list_functii list_functii' sigma sigma',
+| e_decl_functie: forall x s Parametrii stack stack' y list_functii list_functii' sigma sigma',
     (* s -{ sigma }-> sigma' -> *) 
-    stack = compile1 s -> 
+    stack' = ( compile1 s stack) -> 
     list_functii' = ( update_list_functii list_functii x)->
     (decl_functie x Parametrii s y) -*{ sigma }*-> sigma'
 | e_decl_functie_main : forall s sigma sigma',
@@ -591,7 +593,7 @@ Compute coada_last eroareNat error_nat (coada_push eroareNat (coada_push eroareN
 Definition ex_stmt := 
   int "i";; 
   int "j";;
-  (int* "s" ::n= 0 );; 
+  int "s";; 
   ("i":n=0);;
   ("j":n=1);;
   ifthen ( "i" <=' "j") 
@@ -611,8 +613,7 @@ Proof.
               +++ eapply e_seq.
                 ++++ eapply e_nat_decl. eauto.
                 ++++ eapply e_nat_decl. eauto.
-              +++ eapply e_nat_decl_assign.
-                ++++ eapply const.
+              +++ eapply e_nat_decl.
                 ++++ split.
             ++ eapply e_nat_assign. 
               +++ eapply const.
@@ -626,7 +627,7 @@ Proof.
              +++eapply var.
              +++ simpl. reflexivity.
       ++ eapply e_nat_assign. eapply const. eauto.
-     - eapply e_coments.
+     - eapply e_coments.  
   +Abort.
 
 Definition max1 :=
@@ -670,8 +671,6 @@ Proof.
                     ++++++++ split.
                    +++++++ split.
              ++++ eapply e_apelare.
-                    +++++++ split.
-                    +++++++ split.
                     +++++++ split.
                     +++++++ Abort.
 
