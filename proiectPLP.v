@@ -583,12 +583,12 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_lambda_apel : forall x a sigma1 sigma2 ,
     sigma2=(update sigma1 x (sigma1 "var")) ->
     ( lambda_atribuire x a ) -{ sigma1 }-> sigma2
-| e_apelare : forall x b s stmt instruc instruc1 lista_instruc lista parametrii1 sigma1 sigma2,
-    b = search_functie lista x ->
+| e_apelare : forall x parametrii1 sigma1 sigma2,
+    (* b = search_functie lista x ->
     b =true ->
     instruc = compile2 lista_instruc instruc1 ->
     stmt = take_stmt instruc s->
-    stmt -{ sigma1 }-> sigma2 ->
+    stmt -{ sigma1 }-> sigma2 -> *)
     (apelare_functie x parametrii1) -{ sigma1 }-> sigma2
 | e_coments : forall s sigma1 sigma2 ,
     /* s *\ -{ sigma1 }-> sigma2
@@ -602,10 +602,10 @@ Inductive evalprograms : Programs -> Env -> Env -> Prop :=
     sigma' = (update sigma x (naturals (num 0))) ->
     list_glb' = (update_list_globale list_glb x) ->
     (decl_var_globale x) -*{ sigma }*-> sigma'
-| e_decl_functie: forall x s Parametrii stack stack' y list_functii list_functii' sigma sigma',
-    (* s -{ sigma }-> sigma' -> *) 
-    stack' = ( compile1 s stack) -> 
-    list_functii' = ( update_list_functii list_functii x)->
+| e_decl_functie: forall x s Parametrii  y  sigma sigma',
+    s -{ sigma }-> sigma' ->
+    (* stack' = ( compile1 s stack) -> 
+    list_functii' = ( update_list_functii list_functii x)-> *)
     (decl_functie x Parametrii s y) -*{ sigma }*-> sigma'
 | e_decl_functie_main : forall s sigma sigma',
     s -{ sigma }-> sigma' ->
@@ -705,15 +705,15 @@ Abort.
 
 Definition max1 :=
   intglobal "n";*
-  decl_functie "da" [ "ok";"da" ] ( ( ifthen("n"=='0)("ok":n=3)) ) (naturals (num 1)) ;*
+  decl_functie "da" [ "ok";"da" ] ( ("ok":n=3) ) (naturals (num 1)) ;*
   intglobal "ok" ;*
   decl_functie_main ( (int "a") ;;
                        ("a" :n=3 );;
                        lambda "lbd" [] ( int "var";;
-                                                "var":n=3);;
+                                         "var":n=3);;
                        int "m";;
                        lambda_atribuire "m" "lbd";;
-                       ifthen ("m"=='2) ("m":n=3);;
+                       ifthen ("m"=='3) ("m":n=3);;
                        apelare_functie "da" [ "a";"b" ]
                        ).
 
@@ -727,9 +727,9 @@ Proof.
     ++ eapply e_seq_prg.
         +++ eapply e_decl_global;eauto.
         +++ eapply e_decl_functie; eauto.
-            (* +++++ eapply e_nat_assign.
+             +++++ eapply e_nat_assign.
               ++++++ eapply const.
-              ++++++ split. *)
+              ++++++ split.
     ++ eapply e_seq_prg.
       +++ simpl. eapply e_decl_global; eauto.
       +++ eapply e_decl_functie_main. 
@@ -755,8 +755,12 @@ Proof.
                ++++++ eapply b_equal.
                 +++++++ eapply var.
                 +++++++ eapply const.
-                +++++++ simpl.
-            ++++++++  Abort.
+                +++++++ simpl. reflexivity.
+                  ++++++ eapply e_nat_assign.
+                    +++++++ eapply const.
+                    +++++++ split.
+            ++++ eapply e_apelare.
+Abort.
 
 Compute (coada_push nat ( nill nat ) 4).
 Compute (coada_push nat (coada_push nat ( nill nat ) 4) 5).
