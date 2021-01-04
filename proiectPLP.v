@@ -50,8 +50,11 @@ Inductive Stmt :=
 | while : BExp -> Stmt -> Stmt
 | ifthen : BExp -> Stmt -> Stmt
 | ifelse : BExp -> Stmt -> Stmt ->Stmt
-| lambda : string -> Parametrii -> Parametrii -> Stmt -> Stmt
-| comentarii : Stmt -> Stmt.
+| lambda : string -> Parametrii -> Stmt -> Stmt
+| lambda_atribuire : Var -> string -> Stmt
+| comentarii : Stmt -> Stmt
+| switch : AExp -> AExp -> Stmt -> AExp ->Stmt -> Stmt -> Stmt
+| break : Stmt -> Stmt.
 
 Inductive Values :=
 | err_undecl : Values
@@ -114,9 +117,13 @@ Notation " S1 ';*' S2 " := (sequance_program S1 S2)(at level 50).
 Notation " 'Template' '<' S '>'" := (decl_templates S )(at level 49).
 Notation "  a '=*' p1 p2 '{' s '}' ":= (lambda a p1 p2 s )(at level 49).
 Notation " /* s *\ " := (comentarii s ) (at level 48).
+Notation " 'Switch' '(' v ')' '{' 'case' a1 ':' s1 'case' a2 ':' s2 s3 } " := (switch v a1 s1 a2 s2 s3) (at level 50).
 Check For ( "i" :n= 1 ; "i" <=' 11 ; "i" :n= "i" +'1 ) {
       /* "ok" :n= "ok" +' 1 *\
 }.
+Check switch ("v") 3 ("a":n=4) 
+                   4 ("a":n=3)
+                     ("a":n=3) .
 Check While ( "i" =>' 9 ) { "ok" :n= "dada" } .
 Check "k"++'.
 Check 1+'1.
@@ -129,7 +136,7 @@ Check decl_templates "tip" ;*
       decl_functie "da" [ "ok";"da" ] ("ok":n= "ok"++') (naturals (num 1)) ;*
       intglobal "ok" ;*
       decl_functie_main ( (int* "ok"::n="ok"+'1) ;;
-                          lambda "lbd" []["ok"] ("ok":n=1) ;;
+                          lambda "lbd" [] ("ok":n=1) ;;
                           Do { 
                               "ok":n="ok"+'1
                           }while* ( "ok" =>' 0);;
@@ -418,6 +425,36 @@ Check envMem.
 Compute (update_mem mem envMem "sal" mem_default default).
 Compute (update_mem mem ( update_env envMem  "x" (offset 5)) "x" mem_default (naturals (num 5))).
 
+Definition coada_push ( n : Set ) ( c : coada n) ( el : n) : coada n:=
+  match c with
+  | _ => (elem n el c )
+  end.
+Definition coada_pop1 ( n : Set ) ( c : coada n) : coada n:=
+  match c with
+  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => elem n x ( elem n y (nill n))
+  | elem _ x ( elem _ y (nill _ )) => elem n x (nill n) 
+  | elem _ x ( nill _ ) => nill n  
+  | elem _ x c' => c'
+  | nill _ => nill n
+end.
+Fixpoint coada_length (n : Set) ( c : coada n) : nat :=
+  match c with
+  | nill _ => 0
+  | elem _ x c' => 1 + ( coada_length n c')
+  end.
+Definition coada_first ( n : Set) (err : n) (c : coada n) : n :=
+  match c with 
+  | elem _ x c' => x
+  | nill _ => err
+end.
+Definition coada_last ( n : Set) (err : n) (c : coada n) : n :=
+  match c with
+  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => z
+  | elem _ x ( elem _ y (nill _ )) => y 
+  | elem _ x ( nill _ ) => x
+  | elem _ x c' => x
+  | nill _ => err
+end.
 
 Definition update_list_globale ( l : list Var ) ( x : Var )
     : list Var := l++ [x].
@@ -461,8 +498,11 @@ Definition compile1 (e : Stmt) (stack : list Instruction ): list Instruction :=
   | while b c=> stack ++[push_stmt (while b c)]
   | ifthen b c =>stack ++ [push_stmt (ifthen b c)]
   | ifelse b a c => stack ++[push_stmt (ifelse b a c)]
-  | lambda x a b c => stack ++[push_stmt (lambda x a b c)]
+  | lambda x a d => stack ++[push_stmt (lambda x a d)]
+  | lambda_atribuire x b=> stack ++[push_stmt (lambda_atribuire x b)]
   | comentarii c =>stack ++ [push_stmt (comentarii c)]
+  | switch a b c d e f => stack ++ [push_stmt (switch a b c d e f)]
+  | break s => stack ++ [push_stmt ( break s)]
 end.
 Definition compile2 ( l : list Instruction) (i : Instruction) : Instruction := 
   match l with
@@ -470,6 +510,12 @@ Definition compile2 ( l : list Instruction) (i : Instruction) : Instruction :=
   | [] => i
 end.
 
+Definition update_lambda (env : Env) ( x: string ) :=
+fun y =>
+ if(string_beq x y)
+  then (env x)
+  else (naturals 0)
+.
 Reserved Notation "S -{ Sigma }-> Sigma'" (at level 60).
 Inductive eval : Stmt -> Env -> Env -> Prop :=
 | e_nat_assign: forall a i x sigma sigma',
@@ -512,6 +558,18 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
     b ={ sigma }=> boolean false ->
     s2 -{ sigma }-> sigma' ->
     ifelse b s1 s2 -{ sigma }-> sigma' 
+| e_switch1 : forall a i a1 a2 s1 s2 s3 sigma sigma' ,
+    a =[ sigma ]=> i ->
+    s1 -{ sigma }-> sigma' ->
+    switch a a1 s1 a2 s2 s3 -{ sigma }-> sigma'
+| e_switch2 : forall a i a1 a2 s1 s2 s3 sigma sigma' ,
+    a =[ sigma ]=> i ->
+    s2 -{ sigma }-> sigma' ->
+    switch a a1 s1 a2 s2 s3 -{ sigma }-> sigma'
+| e_switchDefault : forall a i a1 a2 s1 s2 s3 sigma sigma' ,
+    a =[ sigma ]=> i ->
+    s3 -{ sigma }-> sigma' ->
+    switch a a1 s1 a2 s2 s3 -{ sigma }-> sigma'
 | e_whilefalse : forall b s sigma,
     b ={ sigma }=> false ->
     while b s -{ sigma }-> sigma
@@ -519,9 +577,12 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
     b ={ sigma }=>  true ->
     (s ;; while b s) -{ sigma }-> sigma' ->
     while b s -{ sigma }-> sigma'
-| e_lambda : forall x s parametrii1 parametrii2 sigma1 sigma2,
+| e_lambda : forall x s parametrii1 sigma1 sigma2,
     s -{ sigma1 }-> sigma2 ->
-    (lambda x parametrii1 parametrii2 s) -{ sigma1 }-> sigma2
+    (lambda x parametrii1 s) -{ sigma1 }-> sigma2
+| e_lambda_apel : forall x a sigma1 sigma2 ,
+    sigma2=(update sigma1 x (sigma1 "var")) ->
+    ( lambda_atribuire x a ) -{ sigma1 }-> sigma2
 | e_apelare : forall x b s stmt instruc instruc1 lista_instruc lista parametrii1 sigma1 sigma2,
     b = search_functie lista x ->
     b =true ->
@@ -530,7 +591,9 @@ Inductive eval : Stmt -> Env -> Env -> Prop :=
     stmt -{ sigma1 }-> sigma2 ->
     (apelare_functie x parametrii1) -{ sigma1 }-> sigma2
 | e_coments : forall s sigma1 sigma2 ,
-    /* s *\ -{ sigma1 }-> sigma2 
+    /* s *\ -{ sigma1 }-> sigma2
+| e_break : forall s sigma1 sigma2 ,
+    (break s ) -{ sigma1 }-> sigma2
 where "s -{ sigma }-> sigma'" := (eval s sigma sigma').
 
 Reserved Notation "S -*{ Sigma }*-> Sigma'" (at level 60).
@@ -556,36 +619,6 @@ Inductive evalprograms : Programs -> Env -> Env -> Prop :=
     decl_templates x -*{ sigma }*-> sigma'
 where "s -*{ sigma }*-> sigma'" := (evalprograms s sigma sigma').
 
-Definition coada_push ( n : Set ) ( c : coada n) ( el : n) : coada n:=
-  match c with
-  | _ => (elem n el c )
-  end.
-Definition coada_pop1 ( n : Set ) ( c : coada n) : coada n:=
-  match c with
-  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => elem n x ( elem n y (nill n))
-  | elem _ x ( elem _ y (nill _ )) => elem n x (nill n) 
-  | elem _ x ( nill _ ) => nill n  
-  | elem _ x c' => c'
-  | nill _ => nill n
-end.
-Fixpoint coada_length (n : Set) ( c : coada n) : nat :=
-  match c with
-  | nill _ => 0
-  | elem _ x c' => 1 + ( coada_length n c')
-  end.
-Definition coada_first ( n : Set) (err : n) (c : coada n) : n :=
-  match c with 
-  | elem _ x c' => x
-  | nill _ => err
-end.
-Definition coada_last ( n : Set) (err : n) (c : coada n) : n :=
-  match c with
-  | elem _ x ( elem _ y ( elem _ z (nill _ ))) => z
-  | elem _ x ( elem _ y (nill _ )) => y 
-  | elem _ x ( nill _ ) => x
-  | elem _ x c' => x
-  | nill _ => err
-end.
 
 Compute (coada_push nat ( nill nat ) 4).
 Compute (coada_push nat (coada_push nat ( nill nat ) 4) 5).
@@ -602,16 +635,24 @@ Definition ex_stmt :=
   ("i":n=0);;
   ("j":n=1);;
   ifthen ( "i" <=' "j") 
-    ("s":n=18 );;
+    (("s":n=18);;
+    break
+    (("s" :n= 11);;
+     ("s" :n= 12) ) );;
   Do 
-  { "s" :n= 10 }
-   while* ( "j"<='"i");;
+  { "s" :n= 10
+  }while* ( "j"<='"i");;
+  switch ("j") 1   ("s":n=18) 
+               "i" ("s":n=17)
+                   ("s":n=13);;
+  bol "c";;
+  ("c" :b= btrue);;
   /* "s":n=19 *\.
+
 Example eval_ex :
-  exists state, ex_stmt -{ env }-> state /\ state "s" = (naturals 18).
+  exists state, ex_stmt -{ env }-> state .
 Proof.
   eexists.
-  split.
   +unfold ex_stmt.
     eapply e_seq.
       -eapply e_seq.  
@@ -620,33 +661,47 @@ Proof.
              ++ eapply e_seq.
               +++ eapply e_seq.
                +++++ eapply e_seq.
-                ++++ eapply e_nat_decl. eauto.
-                ++++ eapply e_nat_decl. eauto.
-              +++++ eapply e_nat_decl.
+                ++++++ eapply e_seq.
+                  +++++++ eapply e_seq.
+                    ++++++++ eapply e_seq.
+                  ++++ eapply e_nat_decl. eauto.
+                  ++++ eapply e_nat_decl. eauto.
+                    ++++++++ eapply e_nat_decl.
                 ++++ split.
-            +++ eapply e_nat_assign. 
+            +++++++ eapply e_nat_assign. 
               ++++ eapply const.
               ++++ split.
-         ++ eapply e_nat_assign.
-           +++ eapply const.
-           +++ split.
-       --- eapply e_if_then.
-           ++eapply b_lessthan.
-             +++eapply var. 
-             +++eapply var.
-             +++ simpl. reflexivity.
-      ++ eapply e_nat_assign. eapply const. eauto.
-    -- eapply e_seq.
-     ++ eapply e_nat_assign.
-        +++ eapply const.
-        +++ split.
-    ++ eapply e_whilefalse.
-      +++ eapply b_lessthan.
+         ++++++ eapply e_nat_assign.
+           ++++ eapply const.
+           ++++ split.
+       +++++ eapply e_if_then.
+           ++++eapply b_lessthan.
+             +++++++ eapply var. 
+             +++++++ eapply var.
+             +++++++ simpl. reflexivity.
+          ++++ eapply e_seq.
+            +++++++ eapply e_nat_assign. eapply const. eauto.
+            +++++++ eapply e_break.
+    +++ eapply e_seq.
+     ++++ eapply e_nat_assign.
+        +++++ eapply const.
+        +++++ split.
+    ++++ eapply e_whilefalse.
+      ++++++ eapply b_lessthan.
         +++++ eapply var.
         +++++ eapply var.
         +++++ simpl. reflexivity.
-     - eapply e_coments.
-  +Abort.
+  ++ eapply e_switch1.
+    +++ eapply var.
+    +++ eapply e_nat_assign.
+      ++++ eapply const.
+      ++++ split.
+  --- eapply e_bool_decl. split.
+  -- eapply e_bool_assign.
+    ++ eapply b_true.
+    ++ split.
+  - eapply e_coments.
+Abort.
 
 Definition max1 :=
   intglobal "n";*
@@ -654,7 +709,11 @@ Definition max1 :=
   intglobal "ok" ;*
   decl_functie_main ( (int "a") ;;
                        ("a" :n=3 );;
-                       lambda "lbd" [] [] ("a":n="a"-'1);;  
+                       lambda "lbd" [] ( int "var";;
+                                                "var":n=3);;
+                       int "m";;
+                       lambda_atribuire "m" "lbd";;
+                       ifthen ("m"=='2) ("m":n=3);;
                        apelare_functie "da" [ "a";"b" ]
                        ).
 
@@ -677,20 +736,35 @@ Proof.
           eapply e_seq.
           ++++ eapply e_seq.
             +++++ eapply e_seq.
+              ++++++ eapply e_seq.
+                -- eapply e_seq.
+                --- eapply e_seq.
               +++++++ eapply e_nat_decl.
                 ++++++++ simpl. split. 
               +++++++ eapply e_nat_assign.
                     ---- eapply const.
                     ---- split.
-             +++++ eapply e_lambda. eapply e_nat_assign.
-                   +++++++ eapply substract.
-                    ++++++++ eapply var.
-                    ++++++++ eapply const.
-                    ++++++++ split.
-                   +++++++ split.
-             ++++ eapply e_apelare.
-                    +++++++ split.
-                    +++++++ Abort.
+             --- eapply e_lambda. eapply e_seq. 
+                  ----- eapply e_nat_decl. split. 
+                  ----- eapply e_nat_assign. 
+                      ---- eapply const.
+                      ---- split.
+            -- eapply e_nat_decl. split.
+              ++++++ eapply e_lambda_apel. split.
+             +++++ eapply e_if_then.
+               ++++++ eapply b_equal.
+                +++++++ eapply var.
+                +++++++ eapply const.
+                +++++++ simpl.
+            ++++++++  Abort.
+
+Compute (coada_push nat ( nill nat ) 4).
+Compute (coada_push nat (coada_push nat ( nill nat ) 4) 5).
+Compute coada_pop1 nat (coada_push nat (coada_push nat ( (coada_push nat ( nill nat )3) ) 4) 5).
+Compute coada_length nat (coada_push nat (coada_push nat ( nill nat ) 4) 5).
+Compute coada_first eroareNat error_nat (coada_push eroareNat (coada_push eroareNat ( nill eroareNat ) (num 4)) (num 5)).
+Compute coada_last eroareNat error_nat (coada_push eroareNat (coada_push eroareNat ( nill eroareNat ) (num 4)) (num 5)).
+
 
 Inductive string  :=
   | EmptyString : string
