@@ -791,3 +791,150 @@ Compute (s_equal "da" "nu").
 Compute s_length "aaaaaaa". 
 
 
+
+Inductive BExp1 :=
+| bTrue : BExp1
+| bFalse : BExp1
+| bVar : Var-> BExp1
+| bNot : BExp1 -> BExp1
+| bAnd : BExp1 -> BExp1 -> BExp1
+| bOr : BExp1 -> BExp1 -> BExp1.
+
+Notation " a &&' b" := (bAnd a b ) (at level 50).
+Notation " a ||' b" := (bOr a b ) (at level 50).
+Notation " !!' b" := (bNot b ) (at level 50).
+Definition EnvB := Var ->bool.
+Definition env0 := fun x => if string_dec x "x" then false else true.
+
+
+Fixpoint interpret (e : BExp1) (env : EnvB) : bool :=
+  match e with
+  | bTrue => true
+  | bFalse => false
+  | bVar x => (env x)
+  | bNot x => negb (interpret x env)
+  | bAnd e1 e2 => andb (interpret e1 env) (interpret e2 env) 
+  | bOr e1 e2 => orb (interpret e1 env) (interpret e2 env)
+  end.
+
+Compute (interpret bFalse env0).
+Compute (interpret (!!' (bVar "x")) env0).
+Compute (interpret (bTrue &&' (bVar "y")) env0).
+Compute (interpret (bTrue ||' (bVar "x")) env0).
+
+
+Inductive BInstruction :=
+| push_const : bool -> BInstruction
+| push_var : Var -> BInstruction
+| notu' : BInstruction
+| andu' : BInstruction
+| oru' : BInstruction.
+
+Definition BStack := list bool.
+Definition run_instruction (i : BInstruction)
+         (env : EnvB) (stack : BStack) : BStack :=
+  match i with
+  | push_const c => (c :: stack)
+  | push_var x => ((env x) :: stack)
+  | notu' => match stack with
+           | n1 :: stack' => ( negb n1) :: stack'
+           | _ => stack
+           end  
+  | andu' => match stack with
+           | n1 :: n2 :: stack' => ( andb n1 n2) :: stack'
+           | _ => stack
+           end 
+  | oru' => match stack with
+           | n1 :: n2 :: stack' => ( orb n1 n2) :: stack'
+           | _ => stack
+           end
+  end.
+
+
+Compute (run_instruction (push_const true) env0 []).
+Compute (run_instruction (push_var "x") env0 []).
+Compute (run_instruction notu' env0 [true]).
+Compute (run_instruction andu' env0 [true;false;false]).
+Compute (run_instruction oru' env0 [true;false;true]).
+
+Fixpoint run_instructions (is' : list BInstruction)
+         (env : EnvB) (stack : BStack) : BStack :=
+  match is' with
+  | [] => stack
+  | i :: is'' => run_instructions is'' env (run_instruction i env stack)
+  end.
+
+Definition pgm2 := [
+                    push_const true ;
+                    push_var "x" ;
+                    andu';
+                    push_var "x";
+                    oru';
+                    notu'
+                  ].
+Compute run_instructions pgm2 env0 [].
+
+Fixpoint compile (e : BExp1) : list BInstruction :=
+  match e with
+  | bTrue => [push_const true]
+  | bFalse => [push_const false]
+  | bVar x => [push_var x]
+  | bNot x => (compile x ) ++ [notu']
+  | bAnd e1 e2 => (compile e1) ++ (compile e2) ++ [andu']
+  | bOr e1 e2 => (compile e1) ++ (compile e2) ++ [oru']
+  end.
+
+
+Compute compile (!!' (bVar "x")).
+Compute compile (bTrue &&' (bVar "x")).
+Compute compile (!!'(bFalse ||' (bVar "x") &&' bTrue)).
+
+Compute interpret (!!'(bFalse ||' (bVar "x") &&' bTrue)) env0.
+Compute run_instructions
+        (compile (!!'(bFalse ||' (bVar "x") &&' bTrue)))
+        env0
+        [].
+
+Lemma soundness_helper :
+  forall e env stack is',
+    run_instructions (compile e ++ is') env stack =
+    run_instructions is' env ((interpret e env) :: stack).
+Proof.
+  induction e; intros; simpl; trivial.
+  - rewrite <- app_assoc.
+    rewrite IHe. simpl. reflexivity.
+  - rewrite <- app_assoc.
+    rewrite <- app_assoc.
+    rewrite IHe1.
+    rewrite IHe2.
+    simpl.
+    rewrite andb_comm.
+    reflexivity.
+  - rewrite <- app_assoc.
+    rewrite <- app_assoc.
+    rewrite IHe1.
+    rewrite IHe2.
+    simpl.
+    rewrite orb_comm.
+    reflexivity.
+Qed.
+
+Theorem soundness :
+  forall e env,
+    run_instructions (compile e) env [] =
+    [interpret e env].
+Proof.
+  intros.
+  rewrite <- app_nil_r with (l := (compile e)).
+  rewrite soundness_helper.
+  simpl. trivial.
+Qed.
+
+
+
+
+
+
+
+
+
